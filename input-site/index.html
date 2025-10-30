@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Voir l’image & partager la position</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    .wrap { min-height: 100dvh; display:grid; place-items:center; padding:16px; }
+    .card { position:relative; max-width: 1000px; width:100%; border-radius:16px; overflow:hidden; box-shadow:0 6px 30px rgba(0,0,0,.15); }
+    .img { display:block; width:100%; height:auto; aspect-ratio: 16/9; object-fit:cover; }
+    .overlay {
+      position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+      background: rgba(0,0,0,.55); color:#fff; gap:12px; padding:20px; text-align:center;
+    }
+    .btn { border:0; padding:12px 18px; border-radius:12px; font-weight:700; cursor:pointer; background:#0ea5a4; color:#fff; }
+    .muted { opacity:.85; font-size:.95rem; }
+    .toast { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:#111; color:#fff; padding:10px 14px; border-radius:8px; font-size:.9rem; display:none; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <figure class="card">
+      <img id="heroImg" class="img" alt="Image" />
+      <figcaption class="overlay" id="overlay">
+        <div>
+          <h2 style="margin:0 0 6px">Voir l’image</h2>
+          <p class="muted" style="margin:0 0 14px">
+            En cliquant, le navigateur demandera l’accès à ta position.
+            Si tu acceptes, nous l’enverrons <strong>une seule fois</strong> à notre serveur.
+          </p>
+          <button id="allowBtn" class="btn">Voir l’image & partager ma position</button>
+          <p class="muted" style="margin:10px 0 0">
+            Tu peux refuser — l’image s’affichera quand même.
+          </p>
+        </div>
+      </figcaption>
+    </figure>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    // --- CONFIG ---
+    const IMAGE_URL = "https://images.unsplash.com/photo-1520975922284-8b456906c813?w=1600&q=80"; // change-la si tu veux
+    const API_BASE  = "https://project-localisation-api.onrender.com";
+    const ENDPOINT  = API_BASE + "/collect";
+    const AUTH_HEADER = null; // ex. "Bearer XXX" si tu protèges l’API
+
+    const heroImg  = document.getElementById('heroImg');
+    const overlay  = document.getElementById('overlay');
+    const allowBtn = document.getElementById('allowBtn');
+    const toast    = document.getElementById('toast');
+    heroImg.src = IMAGE_URL;
+
+    function showToast(msg, ok=true) {
+      toast.textContent = msg;
+      toast.style.background = ok ? "#111" : "#7f1d1d";
+      toast.style.display = "block";
+      setTimeout(()=>toast.style.display="none", 3000);
+    }
+
+    async function sendToEndpoint(payload) {
+      try {
+        const headers = { "Content-Type": "application/json" };
+        if (AUTH_HEADER) headers["Authorization"] = AUTH_HEADER;
+        const res = await fetch(ENDPOINT, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(payload),
+          keepalive: true,
+          mode: "cors"
+        });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        showToast("Position envoyée ✅", true);
+      } catch (e) {
+        console.error(e);
+        showToast("Échec de l’envoi ❌", false);
+      }
+    }
+
+    function buildPayload(position) {
+      const c = position.coords;
+      return {
+        lat: c.latitude,
+        lng: c.longitude,
+        accuracy_m: c.accuracy ?? null,
+        altitude_m: c.altitude ?? null,
+        altitudeAccuracy_m: c.altitudeAccuracy ?? null,
+        heading_deg: c.heading ?? null,
+        speed_mps: c.speed ?? null,
+        timestamp_ms: position.timestamp,
+        userAgent: navigator.userAgent,
+        page: location.href
+      };
+    }
+
+    function requestOnce() {
+      if (!("geolocation" in navigator)) { showToast("Geolocation API non dispo.", false); return; }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => sendToEndpoint(buildPayload(pos)),
+        (err) => {
+          if (err.code === err.PERMISSION_DENIED) showToast("Permission refusée.", false);
+          else showToast("Position indisponible.", false);
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      );
+    }
+
+    allowBtn.addEventListener('click', () => {
+      overlay.style.display = "none";    // révèle l’image
+      requestOnce();                     // demande de position suite au geste utilisateur
+    });
+  </script>
+</body>
+</html>

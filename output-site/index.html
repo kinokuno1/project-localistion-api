@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Mini-map — Positions reçues</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-sA+e2k9c6Zb+gQkQ2h8yVwq4e0YvR2mM1jz0FvP0JQo=" crossorigin="anonymous"/>
+  <style>
+    :root { color-scheme: light dark; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    header { padding:12px 16px; font-weight:700; }
+    #map { height: 80vh; margin: 0 16px 16px; border-radius: 12px; }
+    .panel { margin: 0 16px 16px; font-size:.95rem; opacity:.9; }
+    code { background: rgba(0,0,0,.08); padding:2px 4px; border-radius:6px; }
+  </style>
+</head>
+<body>
+  <header>Mini-map — flux en direct</header>
+  <div class="panel">
+    API: <code id="apiUrl"></code> — Flux: <code id="streamUrl"></code>
+  </div>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-o9N1j7k9f0b6v2u3l3mR7nYk9m6cQG4fH3Ke3k8v+3s=" crossorigin="anonymous"></script>
+  <script>
+    const API_BASE = "https://project-localisation-api.onrender.com";
+    document.getElementById('apiUrl').textContent = API_BASE + "/latest";
+    document.getElementById('streamUrl').textContent = API_BASE + "/stream";
+
+    // Carte
+    const map = L.map('map', { center: [46.8182, 8.2275], zoom: 6 });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
+
+    let marker = null, circle = null;
+    function setPosition(lat, lng, accuracy) {
+      const latlng = [lat, lng];
+      if (!marker) marker = L.marker(latlng).addTo(map).bindPopup('Dernière position reçue');
+      else marker.setLatLng(latlng);
+
+      if (!circle) circle = L.circle(latlng, { radius: accuracy || 30 }).addTo(map);
+      else { circle.setLatLng(latlng); circle.setRadius(accuracy || 30); }
+
+      map.setView(latlng, 15);
+    }
+
+    // Charger dernière position
+    (async () => {
+      try {
+        const r = await fetch(API_BASE + '/latest', { mode: 'cors' });
+        if (r.ok) {
+          const p = await r.json();
+          setPosition(p.lat, p.lng, p.accuracy_m);
+        }
+      } catch {}
+    })();
+
+    // Abonnement temps réel
+    const ev = new EventSource(API_BASE + '/stream');
+    ev.addEventListener('position', (e) => {
+      try { const p = JSON.parse(e.data); setPosition(p.lat, p.lng, p.accuracy_m); } catch {}
+    });
+  </script>
+</body>
+</html>
