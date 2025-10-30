@@ -1,6 +1,6 @@
 // receiver-api/server.js — API sans dépendances (HTTP natif + SSE)
+// Rend tolérant aux /health et /health/ et répond aussi sur /
 import http from 'node:http';
-import { parse } from 'node:url';
 
 const PORT = process.env.PORT || 3000;
 
@@ -44,7 +44,10 @@ function broadcastPosition(pos) {
 }
 
 const server = http.createServer((req, res) => {
-  const { pathname } = parse(req.url, true);
+  // Normalise le chemin: supprime les / finaux, garde "/" si vide
+  const url = new URL(req.url, `http://${req.headers.host}`);
+  let path = url.pathname.replace(/\/+$/, '');
+  if (path === '') path = '/';
 
   // Préflight CORS
   if (req.method === 'OPTIONS') {
@@ -57,25 +60,29 @@ const server = http.createServer((req, res) => {
     return res.end();
   }
 
-  if (pathname === '/health') {
-    res.writeHead(200, { 'Content-Type': 'text/plain', 'Access-Control-Allow-Origin': '*' });
+  // Racine & santé
+  if (path === '/' || path === '/health') {
+    res.writeHead(200, {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Access-Control-Allow-Origin': '*'
+    });
     return res.end('OK');
   }
 
-  if (pathname === '/stream' && req.method === 'GET') {
+  if (path === '/stream' && req.method === 'GET') {
     return handleSSE(req, res);
   }
 
-  if (pathname === '/latest' && req.method === 'GET') {
+  if (path === '/latest' && req.method === 'GET') {
     if (!lastPosition) return sendJson(res, 404, { error: 'No data yet' });
     return sendJson(res, 200, lastPosition);
   }
 
-  if (pathname === '/history' && req.method === 'GET') {
+  if (path === '/history' && req.method === 'GET') {
     return sendJson(res, 200, history);
   }
 
-  if (pathname === '/collect' && req.method === 'POST') {
+  if (path === '/collect' && req.method === 'POST') {
     let raw = '';
     req.on('data', chunk => (raw += chunk));
     req.on('end', () => {
@@ -101,6 +108,7 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // 404
   sendJson(res, 404, { error: 'Not found' });
 });
 
