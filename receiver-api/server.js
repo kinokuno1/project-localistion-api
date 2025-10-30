@@ -1,31 +1,53 @@
-// receiver-api/server.js — API sans dépendances (HTTP natif + SSE)
-// Rend tolérant aux /health et /health/ et répond aussi sur /
+// receiver-api/server.js — Zero-deps API (HTTP natif + SSE) avec CORS robuste
 import http from 'node:http';
 
 const PORT = process.env.PORT || 3000;
+
+// Liste blanche des origines autorisées (ajoute/retire selon tes sites)
+const ALLOWED_ORIGINS = new Set([
+  'https://project-localisation-input.onrender.com',
+  'https://project-localisation-output.onrender.com',
+  // ajoute d'autres domaines si besoin (ex. ton Netlify)
+]);
 
 let lastPosition = null;
 const history = [];
 const MAX_HISTORY = 100;
 const clients = new Set();
 
-function sendJson(res, status, data) {
-  const body = JSON.stringify(data);
-  res.writeHead(status, {
-    'Content-Type': 'application/json; charset=utf-8',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-  });
-  res.end(body);
+/* ---------- CORS helpers ---------- */
+function getOrigin(req) {
+  const o = req.headers.origin;
+  return (o && ALLOWED_ORIGINS.has(o)) ? o : null;
 }
 
+function writeCORS(res, origin) {
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  }
+  // méthodes & en-têtes attendus par le préflight/fetch
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  // pas de credentials ici → pas d’Allow-Credentials (inutile)
+}
+
+function sendJson(req, res, status, data) {
+  const origin = getOrigin(req);
+  res.statusCode = status;
+  writeCORS(res, origin);
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.end(JSON.stringify(data));
+}
+
+/* ---------- SSE ---------- */
 function handleSSE(req, res) {
+  const origin = getOrigin(req);
+  writeCORS(res, origin);
   res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
+    'Content-Type': 'text/event-stream; charset=utf-8',
     'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive',
-    'Access-Control-Allow-Origin': '*'
+    'Connection': 'keep-alive'
   });
   res.write('retry: 5000\n\n');
   clients.add(res);
@@ -43,29 +65,28 @@ function broadcastPosition(pos) {
   }
 }
 
+/* ---------- Server ---------- */
 const server = http.createServer((req, res) => {
-  // Normalise le chemin: supprime les / finaux, garde "/" si vide
+  // Normalise le chemin (pas de slash final)
   const url = new URL(req.url, `http://${req.headers.host}`);
   let path = url.pathname.replace(/\/+$/, '');
   if (path === '') path = '/';
 
-  // Préflight CORS
+  // Préflight CORS (OPTIONS) – répondre AVANT tout
   if (req.method === 'OPTIONS') {
-    res.writeHead(204, {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Access-Control-Max-Age': '86400'
-    });
-    return res.end();
+    const origin = getOrigin(req);
+    writeCORS(res, origin);
+    // annonce ce que tu acceptes ; 204 = No Content
+    res.statusCode = 204;
+    res.end();
+    return;
   }
 
-  // Racine & santé
+  // Santé / racine
   if (path === '/' || path === '/health') {
-    res.writeHead(200, {
-      'Content-Type': 'text/plain; charset=utf-8',
-      'Access-Control-Allow-Origin': '*'
-    });
+    const origin = getOrigin(req);
+    writeCORS(res, origin);
+    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
     return res.end('OK');
   }
 
@@ -74,12 +95,12 @@ const server = http.createServer((req, res) => {
   }
 
   if (path === '/latest' && req.method === 'GET') {
-    if (!lastPosition) return sendJson(res, 404, { error: 'No data yet' });
-    return sendJson(res, 200, lastPosition);
+    if (!lastPosition) return sendJson(req, res, 404, { error: 'No data yet' });
+    return sendJson(req, res, 200, lastPosition);
   }
 
   if (path === '/history' && req.method === 'GET') {
-    return sendJson(res, 200, history);
+    return sendJson(req, res, 200, history);
   }
 
   if (path === '/collect' && req.method === 'POST') {
@@ -89,7 +110,7 @@ const server = http.createServer((req, res) => {
       try {
         const data = raw ? JSON.parse(raw) : {};
         if (typeof data.lat !== 'number' || typeof data.lng !== 'number') {
-          return sendJson(res, 400, { error: 'Missing/invalid lat/lng' });
+          return sendJson(req, res, 400, { error: 'Missing/invalid lat/lng' });
         }
         const enriched = {
           ...data,
@@ -100,18 +121,18 @@ const server = http.createServer((req, res) => {
         history.push(enriched);
         if (history.length > MAX_HISTORY) history.shift();
         broadcastPosition(enriched);
-        sendJson(res, 200, { ok: true });
+        return sendJson(req, res, 200, { ok: true });
       } catch {
-        return sendJson(res, 400, { error: 'Invalid JSON' });
+        return sendJson(req, res, 400, { error: 'Invalid JSON' });
       }
     });
     return;
   }
 
-  // 404
-  sendJson(res, 404, { error: 'Not found' });
+  // 404 JSON (avec CORS)
+  return sendJson(req, res, 404, { error: 'Not found' });
 });
 
 server.listen(PORT, () => {
-  console.log(`Zero-deps Receiver API on http://localhost:${PORT}`);
+  console.log(`Zero-deps Receiver API with strict CORS on http://localhost:${PORT}`);
 });
